@@ -1,0 +1,110 @@
+#!/bin/sh
+set -eux
+PROJECT_NAME=$(basename $(git rev-parse --show-toplevel))
+GIT_NAME="$(git config user.name)"
+GIT_EMAIL="$(git config user.email)"
+GIT_PERSON="${GIT_NAME} <${GIT_EMAIL}>"
+
+### this provides the GIT_VERSION so you know which version you are actually running
+cat <<__EE__ >build.rs
+
+use std::env;
+
+fn main() {
+    use std::process::Command;
+
+    let describe_output = Command::new("git")
+        .arg("describe")
+        .arg("--all")
+        .arg("--long")
+        .output()
+        .unwrap();
+
+    let mut describe = String::from_utf8_lossy(&describe_output.stdout).to_string();
+    describe.pop();
+
+    println!("cargo:rustc-env=GIT_VERSION=version {}", &describe);
+}
+
+__EE__
+
+
+### delete the depencies from Cargo.toml
+sed -i.bak '/^\[dependencies\]$/,$d' Cargo.toml
+
+### add some necessary ones
+cat <<__EE__ >>Cargo.toml
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.8"
+minreq = { version = "2.3.0", features = ["https-rustls", "json-using-serde"] }
+clap = "3.0.0-beta.2"
+__EE__
+
+
+cat <<__EE__ >src/main.rs
+use clap::Clap;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::time::{Duration, SystemTime};
+
+
+
+/// This program does something useful, but its author needs to edit this.
+/// Else it will be just hanging around forever
+#[derive(Debug, Clone, Clap, Serialize, Deserialize)]
+#[clap(version = env!("GIT_VERSION"), author = "${GIT_PERSON}")]
+struct Opts {
+    /// Target hostname to do things on 
+    #[clap(short, long, default_value = "localhost")]
+    target_host: String,
+
+    /// Override options from this yaml/json file
+    #[clap(short, long)]
+    options_override: Option<String>,
+
+    /// A level of verbosity, and can be used multiple times
+    #[clap(short, long, parse(from_occurrences))]
+    verbose: i32,
+}
+
+
+fn main() {
+    let opts: Opts = Opts::parse();
+
+
+    // allow to load the options, so far there is no good built-in way
+    let opts = if let Some(fname) = &opts.options_override {
+        if let Ok(data) = std::fs::read_to_string(&fname) {
+            let res = serde_json::from_str(&data);
+            if res.is_ok() {
+                res.unwrap()
+            } else {
+                serde_yaml::from_str(&data).unwrap()
+            }
+        } else {
+            opts
+        }
+    } else {
+        opts
+    };
+
+
+    if opts.verbose > 4 {
+        let data = serde_json::to_string_pretty(&opts).unwrap();
+        println!("{}", data);
+        println!("===========");
+        let data = serde_yaml::to_string(&opts).unwrap();
+        println!("{}", data);
+    }
+
+    println!("Hello, here is your options: {:#?}", &opts);
+
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+}
+__EE__
+
+cargo fmt
+
