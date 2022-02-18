@@ -41,12 +41,12 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.8"
 minreq = { version = "2.3.0", features = ["https-rustls", "json-using-serde"] }
-clap = "3.0.0-beta.2"
+clap = { version = "3.0.0", features = ["derive"] }
 __EE__
 
 
 cat <<__EE__ >src/main.rs
-use clap::Clap;
+use clap::Parser as ClapParser;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
@@ -55,7 +55,7 @@ use std::time::{Duration, SystemTime};
 
 /// This program does something useful, but its author needs to edit this.
 /// Else it will be just hanging around forever
-#[derive(Debug, Clone, Clap, Serialize, Deserialize)]
+#[derive(Debug, Clone, ClapParser, Serialize, Deserialize)]
 #[clap(version = env!("GIT_VERSION"), author = "${GIT_PERSON}")]
 struct Opts {
     /// Target hostname to do things on 
